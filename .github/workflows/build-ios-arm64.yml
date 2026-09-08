@@ -1,0 +1,82 @@
+name: Build iSH ARM64
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build iSH-ARM64
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          clang --version
+          git --version
+
+      - name: Install build dependencies
+        run: |
+          brew update
+          brew install meson ninja python
+
+      - name: Verify dependencies
+        run: |
+          meson --version
+          ninja --version
+          python3 --version
+          which file
+          which curl
+          which tar
+
+      - name: Verify submodules
+        run: |
+          git submodule status --recursive
+
+      - name: Build iSH ARM64 without signing
+        run: |
+          xcodebuild \
+            -project iSH.xcodeproj \
+            -scheme iSH-ARM64 \
+            -configuration Debug-ApplePleaseFixFB19282108 \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Locate application
+        run: |
+          echo "Searching for iSH ARM64.app..."
+          find . -type d -name "*.app" -print
+
+      - name: Package build artifact
+        run: |
+          mkdir -p artifacts
+          APP_PATH="$(find "$HOME/Library/Developer/Xcode/DerivedData" \
+            -type d \
+            -name "iSH ARM64.app" \
+            -print -quit)"
+
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: iSH ARM64.app was not found."
+            exit 1
+          fi
+
+          echo "Found:"
+          echo "$APP_PATH"
+
+          ditto "$APP_PATH" "artifacts/iSH ARM64.app"
+
+      - name: Upload unsigned app
+        uses: actions/upload-artifact@v4
+        with:
+          name: iSH-ARM64-unsigned-build
+          path: artifacts/iSH ARM64.app
+          if-no-files-found: error
